@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useApp } from "./AppProvider";
 import { PLATFORMS } from "@/app/lib/i18n";
 import AdSlot from "./AdSlot";
+import { triggerBrowserDownload } from "@/app/lib/browser-download";
 import {
   IconYouTube, IconTikTok, IconInstagram, IconX, IconFacebook, IconBilibili,
   IconLink, IconDownload,
@@ -59,14 +60,9 @@ export default function Home() {
       quality: f.selector,
       title: result.title,
     });
-    // Trigger the download inside a hidden iframe: an attachment response saves
-    // the file, while any error response (429/503/413) loads harmlessly in the
-    // iframe instead of navigating away from the page.
-    const iframe = document.createElement("iframe");
-    iframe.style.display = "none";
-    iframe.src = `/api/download?${params.toString()}`;
-    document.body.appendChild(iframe);
-    setTimeout(() => iframe.remove(), 10 * 60 * 1000);
+    const downloadUrl = `/api/download?${params.toString()}`;
+    const extension = f.kind === "audio" ? "mp3" : "mp4";
+    triggerBrowserDownload(document, downloadUrl, `${result.title || "video"}.${extension}`);
 
     setGrabbing(f.quality);
     setTimeout(() => setGrabbing(null), 2500);
