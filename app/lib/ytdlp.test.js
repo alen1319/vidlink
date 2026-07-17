@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildResult, cookieArgs, formatSelector, humanDuration, humanSize,
+  buildResult, cookieArgs, formatSelector, humanDuration, humanSize, potArgs,
   humanViews, isValidUrl, safeName,
 } from "./ytdlp";
 
@@ -59,6 +59,22 @@ describe("formatting helpers", () => {
     expect(cookieArgs()).toEqual([]);
     if (previous === undefined) delete process.env.YT_DLP_COOKIES;
     else process.env.YT_DLP_COOKIES = previous;
+  });
+
+  it("builds PO-token provider args only when configured", () => {
+    const previous = process.env.YT_DLP_POT_PROVIDER_URL;
+    delete process.env.YT_DLP_POT_PROVIDER_URL;
+    expect(potArgs()).toEqual([]);
+    process.env.YT_DLP_POT_PROVIDER_URL = "https://example.com";
+    expect(potArgs()).toEqual([]);
+    process.env.YT_DLP_POT_PROVIDER_URL = "http://pot-provider:4416";
+    expect(potArgs()).toEqual([
+      "--js-runtimes", "node",
+      "--extractor-args", "youtubepot-bgutilhttp:base_url=http://pot-provider:4416",
+      "--extractor-args", "youtube:player_client=mweb",
+    ]);
+    if (previous === undefined) delete process.env.YT_DLP_POT_PROVIDER_URL;
+    else process.env.YT_DLP_POT_PROVIDER_URL = previous;
   });
 });
 

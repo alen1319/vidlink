@@ -18,6 +18,10 @@ services:
       - MAX_FILESIZE=1G
       # Cookies file (mounted below) to authenticate yt-dlp for YouTube etc.
       - YT_DLP_COOKIES=/cookies/cookies.txt
+      - YT_DLP_POT_PROVIDER_URL=http://pot-provider:4416
+    depends_on:
+      pot-provider:
+        condition: service_started
     volumes:
       # Put a Netscape-format cookies.txt in ./cookies/ on the host.
       # Read-only mount; updating the file needs no rebuild, just a restart.
@@ -38,3 +42,19 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  pot-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:1.3.1@sha256:1aaa43a0ca72dfca6a6d2129a0fb4a23465c25adb1b043f8aff829a20825646b
+    container_name: vidlink-pot-provider
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m
+    pids_limit: 64
+    mem_limit: 512m
+    cpus: 0.5
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
