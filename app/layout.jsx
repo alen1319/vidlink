@@ -1,8 +1,4 @@
 import "./globals.css";
-import AppProvider from "./components/AppProvider";
-import Nav from "./components/Nav";
-import Footer from "./components/Footer";
-import CookieBanner from "./components/CookieBanner";
 
 const SITE = "https://vidlink.app";
 const ADSENSE_CLIENT = process.env.NEXT_PUBLIC_ADSENSE_CLIENT || "";
@@ -73,14 +69,7 @@ export default function RootLayout({ children }) {
           />
         )}
       </head>
-      <body>
-        <AppProvider>
-          <Nav />
-          {children}
-          <Footer />
-          <CookieBanner />
-        </AppProvider>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

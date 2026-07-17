@@ -6,7 +6,7 @@ import AdSlot from "./AdSlot";
 import { triggerBrowserDownload } from "@/app/lib/browser-download";
 import {
   IconYouTube, IconTikTok, IconInstagram, IconX, IconFacebook, IconBilibili,
-  IconLink, IconDownload,
+  IconLink, IconDownload, IconClipboard,
 } from "./icons";
 
 export default function Home() {
@@ -20,8 +20,33 @@ export default function Home() {
   const [faqOpen, setFaqOpen] = useState(0);
   const [grabbing, setGrabbing] = useState(null); // quality currently downloading
 
-  async function onParse() {
-    const u = url.trim();
+  /**
+   * Single-button flow: when the field is empty, pull the URL from the
+   * clipboard first, then parse it. When it already has text, just parse.
+   */
+  async function onPasteAndParse() {
+    if (loading) return;
+    let u = url.trim();
+    if (!u) {
+      try {
+        const txt = (await navigator.clipboard.readText()).trim();
+        if (txt) {
+          u = txt;
+          setUrl(txt);
+        }
+      } catch {
+        // Clipboard blocked (permission/insecure context) — fall through.
+      }
+      if (!u) {
+        setError(t.parseError);
+        return;
+      }
+    }
+    await onParse(u);
+  }
+
+  async function onParse(override) {
+    const u = (override ?? url).trim();
     if (!u || loading) return;
     setLoading(true);
     setResult(null);
@@ -41,15 +66,6 @@ export default function Home() {
       setError(t.parseError);
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function onPaste() {
-    try {
-      const txt = await navigator.clipboard.readText();
-      if (txt) setUrl(txt);
-    } catch {
-      setUrl(PLATFORMS[0]);
     }
   }
 
@@ -101,9 +117,10 @@ export default function Home() {
                 placeholder={t.placeholder}
                 style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontFamily: "'JetBrains Mono',monospace", fontSize: "14.5px", color: "var(--ink)", minWidth: 0 }}
               />
-              <button onClick={onPaste} style={{ flexShrink: 0, padding: "9px 12px", border: "none", background: "transparent", color: "var(--faint)", fontSize: 13, fontWeight: 600, cursor: "pointer", borderRadius: 9 }}>{t.paste}</button>
-              <button onClick={onParse} style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, minWidth: 112, padding: "11px 20px", border: "none", borderRadius: 10, background: "var(--grad)", color: "var(--btn-fg)", fontFamily: "inherit", fontSize: 14, fontWeight: 700, cursor: loading ? "default" : "pointer" }}>
-                {loading ? <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(128,128,128,0.4)", borderTopColor: "var(--btn-fg)", borderRadius: "50%", animation: "spin .7s linear infinite" }} /> : t.download}
+              <button onClick={onPasteAndParse} className="dc-hover" style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minWidth: 150, padding: "12px 22px", border: "none", borderRadius: 10, background: "var(--grad)", color: "var(--btn-fg)", fontFamily: "inherit", fontSize: 14, fontWeight: 700, cursor: loading ? "default" : "pointer" }}>
+                {loading
+                  ? <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(0,0,0,0.35)", borderTopColor: "var(--btn-fg)", borderRadius: "50%", animation: "spin .7s linear infinite" }} />
+                  : <><IconClipboard />{t.pasteDownload}</>}
               </button>
             </div>
 

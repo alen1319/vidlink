@@ -43,6 +43,37 @@ services:
       retries: 3
       start_period: 20s
 
+  # Telegram bot: same image, different entrypoint. Long-polls Telegram, so it
+  # needs no inbound port and sits behind the firewall untouched.
+  bot:
+    build: .
+    image: vidlink:latest
+    container_name: vidlink-bot
+    restart: unless-stopped
+    command: ["node", "bot/index.mjs"]
+    environment:
+      - NODE_ENV=production
+      # Set BOT_TOKEN in .env next to this file (git-ignored).
+      - BOT_TOKEN=${BOT_TOKEN:?BOT_TOKEN is required — put it in .env}
+      - SITE_URL=https://vidlink.app
+      - MINIAPP_URL=https://bot.vidlink.app
+      - YT_DLP_COOKIES=/cookies/cookies.txt
+      - YT_DLP_POT_PROVIDER_URL=http://pot-provider:4416
+    depends_on:
+      pot-provider:
+        condition: service_started
+    volumes:
+      - ./cookies:/cookies:ro
+    tmpfs:
+      - /tmp:size=3g
+    pids_limit: 128
+    mem_limit: 2g
+    cpus: 1
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
   pot-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:1.3.1@sha256:1aaa43a0ca72dfca6a6d2129a0fb4a23465c25adb1b043f8aff829a20825646b
     container_name: vidlink-pot-provider

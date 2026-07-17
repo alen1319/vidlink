@@ -12,6 +12,9 @@ export function cookieArgs() {
   return p && existsSync(p) ? ["--cookies", p] : [];
 }
 
+// Point the bgutil PO-token plugin at its provider service. YouTube demands a
+// PO token from datacenter IPs ("Sign in to confirm you're not a bot"); this is
+// what lets the server fetch one. No-op when the provider isn't configured.
 export function potArgs() {
   const baseUrl = process.env.YT_DLP_POT_PROVIDER_URL || "";
   if (baseUrl !== "http://pot-provider:4416") return [];

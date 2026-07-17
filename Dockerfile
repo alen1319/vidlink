@@ -33,6 +33,9 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
+# Telegram bot (same image, run with `node bot/index.mjs`; zero npm deps).
+COPY bot ./bot
+
 # Run as the unprivileged node user.
 USER node
 
