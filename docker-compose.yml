@@ -15,6 +15,12 @@ services:
       # - NEXT_PUBLIC_ADSENSE_SLOT_BOTTOM=0987654321
       - MAX_CONCURRENT_DOWNLOADS=3
       - MAX_FILESIZE=2G
+      # Cookies file (mounted below) to authenticate yt-dlp for YouTube etc.
+      - YT_DLP_COOKIES=/cookies/cookies.txt
+    volumes:
+      # Put a Netscape-format cookies.txt in ./cookies/ on the host.
+      # Read-only mount; updating the file needs no rebuild, just a restart.
+      - ./cookies:/cookies:ro
     # Downloads land in a temp dir; keep it on fast storage / tmpfs if desired.
     tmpfs:
       - /tmp:size=4g

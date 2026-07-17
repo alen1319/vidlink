@@ -4,7 +4,7 @@ import { createReadStream } from "node:fs";
 import { Readable } from "node:stream";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { YT_DLP, formatSelector, isValidUrl, safeName } from "@/app/lib/ytdlp";
+import { YT_DLP, formatSelector, isValidUrl, safeName, cookieArgs } from "@/app/lib/ytdlp";
 import { rateLimit } from "@/app/lib/ratelimit";
 import { acquireSlot } from "@/app/lib/queue";
 import { LIMITS, clientIp } from "@/app/lib/limits";
@@ -57,6 +57,7 @@ export async function GET(req) {
     "--socket-timeout", "30",
     "--max-filesize", LIMITS.maxFilesize,
     "--match-filter", `duration < ${LIMITS.maxDurationSec}`,
+    ...cookieArgs(),
     "-o", outTemplate,
   ];
 
