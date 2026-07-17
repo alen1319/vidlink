@@ -13,15 +13,21 @@ export default function AppProvider({ children }) {
 
   // Load persisted prefs on mount.
   useEffect(() => {
+    let storedConsent = null;
+    let storedTheme = null;
+    let storedLang = null;
     try {
-      const c = localStorage.getItem("vidlink-consent");
-      if (c) setConsent(c);
-      const t = localStorage.getItem("vidlink-theme");
-      if (t === "light" || t === "dark") setTheme(t);
-      const l = localStorage.getItem("vidlink-lang");
-      if (l === "en" || l === "zh") setLang(l);
+      storedConsent = localStorage.getItem("vidlink-consent");
+      storedTheme = localStorage.getItem("vidlink-theme");
+      storedLang = localStorage.getItem("vidlink-lang");
     } catch {}
-    setReady(true);
+    const timer = setTimeout(() => {
+      if (storedConsent) setConsent(storedConsent);
+      if (storedTheme === "light" || storedTheme === "dark") setTheme(storedTheme);
+      if (storedLang === "en" || storedLang === "zh") setLang(storedLang);
+      setReady(true);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const toggleTheme = useCallback(() => {

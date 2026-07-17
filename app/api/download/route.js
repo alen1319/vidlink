@@ -28,16 +28,20 @@ export async function GET(req) {
   const url = (searchParams.get("url") || "").trim();
   const selector = searchParams.get("quality") || "720";
   const title = searchParams.get("title") || "video";
+  const allowedSelectors = new Set(["mp3", "360", "480", "720", "1080"]);
 
-  if (!url || !isValidUrl(url)) {
+  if (!url || !isValidUrl(url) || !allowedSelectors.has(selector)) {
     return new Response("invalid_url", { status: 400 });
   }
 
   // Bound total concurrent downloads; reject fast when the queue is full.
   let release;
   try {
-    release = await acquireSlot();
+    release = await acquireSlot({ signal: req.signal, timeoutMs: 15_000 });
   } catch (e) {
+    if (e?.code === "aborted") {
+      return new Response("aborted", { status: 499 });
+    }
     if (e?.code === "busy") {
       return new Response("busy", { status: 503, headers: { "Retry-After": "20" } });
     }
@@ -45,13 +49,18 @@ export async function GET(req) {
   }
 
   const isAudio = selector === "mp3";
-  const dir = await mkdtemp(path.join(tmpdir(), "vidlink-"));
+  let dir;
+  try {
+    dir = await mkdtemp(path.join(tmpdir(), "vidlink-"));
+  } catch {
+    release();
+    return new Response("download_failed", { status: 500 });
+  }
   const outTemplate = path.join(dir, "media.%(ext)s");
 
   const args = [
     "--no-playlist",
     "--no-warnings",
-    "--no-check-certificate",
     "--no-part",
     "--retries", "3",
     "--socket-timeout", "30",
@@ -73,9 +82,8 @@ export async function GET(req) {
   } catch (e) {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
     release();
-    return new Response("download_failed: " + String(e?.message || e).slice(0, 200), {
-      status: 502,
-    });
+    console.error("download_failed", { message: String(e?.message || e).slice(0, 300) });
+    return new Response("download_failed", { status: 502 });
   }
 
   // Locate the produced file.
@@ -83,6 +91,7 @@ export async function GET(req) {
   try {
     files = await readdir(dir);
   } catch {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
     release();
     return new Response("download_failed", { status: 502 });
   }
@@ -96,7 +105,14 @@ export async function GET(req) {
 
   const filePath = path.join(dir, produced);
   const ext = path.extname(produced).slice(1) || (isAudio ? "mp3" : "mp4");
-  const size = (await stat(filePath)).size;
+  let size;
+  try {
+    size = (await stat(filePath)).size;
+  } catch {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+    release();
+    return new Response("download_failed", { status: 502 });
+  }
   const filename = `${safeName(title)}.${ext}`;
 
   const contentType = isAudio
@@ -107,7 +123,10 @@ export async function GET(req) {
 
   // Stream the file, then release the slot and clean up the temp dir.
   const nodeStream = createReadStream(filePath);
+  let cleaned = false;
   const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
     rm(dir, { recursive: true, force: true }).catch(() => {});
     release();
   };
@@ -127,10 +146,17 @@ export async function GET(req) {
 
 function runDownload(args, timeoutMs) {
   return new Promise((resolve, reject) => {
-    const child = spawn(YT_DLP, args, { stdio: ["ignore", "ignore", "pipe"] });
+    const child = spawn(YT_DLP, args, {
+      stdio: ["ignore", "ignore", "pipe"],
+      detached: process.platform !== "win32",
+    });
     let err = "";
     const timer = setTimeout(() => {
-      child.kill("SIGKILL");
+      try {
+        process.kill(-child.pid, "SIGKILL");
+      } catch {
+        child.kill("SIGKILL");
+      }
       reject(new Error("download timed out"));
     }, timeoutMs);
     child.stderr.on("data", (d) => (err += d));

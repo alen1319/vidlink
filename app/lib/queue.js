@@ -10,21 +10,40 @@ const queue = [];
 
 function next() {
   if (queue.length === 0 || active >= LIMITS.maxConcurrentDownloads) return;
-  active++;
-  const resolve = queue.shift();
+  const entry = queue.shift();
   waiting--;
-  resolve();
+  entry.done = true;
+  clearTimeout(entry.timer);
+  entry.signal?.removeEventListener("abort", entry.abort);
+  active++;
+  entry.resolve(createRelease());
+}
+
+function createRelease() {
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    active = Math.max(0, active - 1);
+    next();
+  };
 }
 
 /**
  * Acquire a slot. Resolves with a release() fn, or rejects with a `busy`
  * error if the queue is already full.
  */
-export function acquireSlot() {
+export function acquireSlot({ signal, timeoutMs = 15_000 } = {}) {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      const e = new Error("aborted");
+      e.code = "aborted";
+      reject(e);
+      return;
+    }
     if (active < LIMITS.maxConcurrentDownloads) {
       active++;
-      resolve(release);
+      resolve(createRelease());
       return;
     }
     if (waiting >= LIMITS.maxQueue) {
@@ -34,13 +53,26 @@ export function acquireSlot() {
       return;
     }
     waiting++;
-    queue.push(() => resolve(release));
+    const entry = { resolve, reject, signal, done: false, timer: null, abort: null };
+    const cancel = (code) => {
+      if (entry.done) return;
+      entry.done = true;
+      const index = queue.indexOf(entry);
+      if (index >= 0) {
+        queue.splice(index, 1);
+        waiting--;
+      }
+      clearTimeout(entry.timer);
+      signal?.removeEventListener("abort", entry.abort);
+      const e = new Error(code);
+      e.code = code;
+      reject(e);
+    };
+    entry.abort = () => cancel("aborted");
+    entry.timer = setTimeout(() => cancel("busy"), timeoutMs);
+    signal?.addEventListener("abort", entry.abort, { once: true });
+    queue.push(entry);
   });
-}
-
-function release() {
-  active = Math.max(0, active - 1);
-  next();
 }
 
 export function stats() {

@@ -13,8 +13,8 @@ services:
       # - NEXT_PUBLIC_ADSENSE_CLIENT=ca-pub-xxxxxxxxxxxxxxxx
       # - NEXT_PUBLIC_ADSENSE_SLOT_TOP=1234567890
       # - NEXT_PUBLIC_ADSENSE_SLOT_BOTTOM=0987654321
-      - MAX_CONCURRENT_DOWNLOADS=3
-      - MAX_FILESIZE=2G
+      - MAX_CONCURRENT_DOWNLOADS=2
+      - MAX_FILESIZE=1G
       # Cookies file (mounted below) to authenticate yt-dlp for YouTube etc.
       - YT_DLP_COOKIES=/cookies/cookies.txt
     volumes:
@@ -23,4 +23,17 @@ services:
       - ./cookies:/cookies:ro
     # Downloads land in a temp dir; keep it on fast storage / tmpfs if desired.
     tmpfs:
-      - /tmp:size=4g
+      - /tmp:size=3g
+    pids_limit: 128
+    mem_limit: 6g
+    cpus: 1.75
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

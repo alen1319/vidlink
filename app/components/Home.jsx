@@ -228,8 +228,8 @@ export default function Home() {
             <h2 style={{ fontFamily: "'Newsreader',serif", fontWeight: 400, fontSize: "clamp(28px,4vw,40px)", lineHeight: 1.1, letterSpacing: "-0.02em", color: "#f7f5f0", marginBottom: 18 }}>{t.extTitle}</h2>
             <p style={{ fontSize: "15.5px", lineHeight: 1.65, color: "#a8a399", marginBottom: 28, maxWidth: 420 }}>{t.extDesc}</p>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <a href="#" style={{ display: "flex", alignItems: "center", gap: 9, padding: "13px 22px", background: "#f4f3ef", color: "#171614", borderRadius: 12, fontSize: 14, fontWeight: 700 }}>🧩 {t.extChrome}</a>
-              <a href="#" style={{ display: "flex", alignItems: "center", gap: 9, padding: "13px 22px", background: "transparent", color: "#f4f3ef", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 12, fontSize: 14, fontWeight: 700 }}>🦊 {t.extFirefox}</a>
+              <span aria-disabled="true" style={{ display: "flex", alignItems: "center", gap: 9, padding: "13px 22px", background: "#f4f3ef", color: "#171614", borderRadius: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>🧩 {t.extChrome}</span>
+              <span aria-disabled="true" style={{ display: "flex", alignItems: "center", gap: 9, padding: "13px 22px", background: "transparent", color: "#f4f3ef", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 12, fontSize: 14, fontWeight: 700, opacity: 0.75 }}>🦊 {t.extFirefox}</span>
             </div>
           </div>
           <div style={{ position: "relative", aspectRatio: "4/3", borderRadius: 16, background: "repeating-linear-gradient(135deg,#252220,#252220 10px,#2c2926 10px,#2c2926 20px)", display: "flex", alignItems: "center", justifyContent: "center" }}>

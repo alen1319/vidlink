@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { fetchInfo, buildResult, isValidUrl } from "@/app/lib/ytdlp";
 import { rateLimit } from "@/app/lib/ratelimit";
 import { LIMITS, clientIp } from "@/app/lib/limits";
+import { acquireSlot } from "@/app/lib/queue";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,10 @@ export async function POST(req) {
 
   let body;
   try {
+    const contentLength = Number(req.headers.get("content-length") || 0);
+    if (contentLength > 4096) {
+      return NextResponse.json({ error: "request_too_large" }, { status: 413 });
+    }
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
@@ -28,6 +33,16 @@ export async function POST(req) {
 
   if (!url || !isValidUrl(url)) {
     return NextResponse.json({ error: "invalid_url" }, { status: 400 });
+  }
+
+  let release;
+  try {
+    release = await acquireSlot({ signal: req.signal, timeoutMs: 10_000 });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e?.code === "aborted" ? "aborted" : "busy" },
+      { status: e?.code === "aborted" ? 499 : 503, headers: { "Retry-After": "10" } }
+    );
   }
 
   try {
@@ -46,9 +61,12 @@ export async function POST(req) {
   } catch (e) {
     const msg = String(e?.message || e);
     const unsupported = /Unsupported URL|not a valid URL/i.test(msg);
+    console.error("parse_failed", { message: msg.slice(0, 300) });
     return NextResponse.json(
-      { error: unsupported ? "unsupported" : "parse_failed", detail: msg.slice(0, 300) },
+      { error: unsupported ? "unsupported" : "parse_failed" },
       { status: 422 }
     );
+  } finally {
+    release();
   }
 }
