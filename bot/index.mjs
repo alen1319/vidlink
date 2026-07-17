@@ -15,6 +15,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { isSupportedUrl, parseDownloadCallback } from "./validation.mjs";
 import { createConcurrencyGate, createJobStore, createRateLimiter, shouldUseBrowserDownload } from "./runtime.mjs";
+import {
+  buildHelpMessage,
+  buildHomeMessage,
+  buildPasteMessage,
+  createLocaleStore,
+  resolveMenuAction,
+} from "./messages.mjs";
 
 const TOKEN = process.env.BOT_TOKEN || "";
 const API = `https://api.telegram.org/bot${TOKEN}`;
@@ -32,6 +39,7 @@ const mediaGate = createConcurrencyGate(MAX_ACTIVE_MEDIA);
 const telegramGate = createConcurrencyGate(8);
 const rateLimiter = createRateLimiter({ limit: 6, windowMs: 60_000, maxEntries: 5000 });
 const jobs = createJobStore({ maxEntries: 500, ttlMs: 3600_000 });
+const locales = createLocaleStore(5000);
 
 if (!TOKEN) {
   console.error("BOT_TOKEN is not set — refusing to start.");
@@ -217,25 +225,47 @@ async function onMessage(msg) {
   const text = (msg.text || "").trim();
 
   if (!rateLimiter.allow(userId)) return;
-
-  if (text.startsWith("/start")) {
+  if (msg.chat.type && msg.chat.type !== "private") {
     return tg("sendMessage", {
       chat_id: chatId,
-      text:
-        "👋 *Vidlink* — 粘贴任意视频链接，我来帮你下载。\n\n" +
-        "支持 YouTube、TikTok/抖音、Instagram、X、Facebook、Bilibili 等。\n" +
-        "直接发链接给我，或点下方按钮打开小程序。",
-      parse_mode: "Markdown",
+      text: "请私聊 Vidlink 机器人使用下载和小程序功能。\nPlease use Vidlink in a private chat.",
+    });
+  }
+
+  const languageCode = msg.from?.language_code || "";
+  const preferredLocale = !languageCode || languageCode.startsWith("zh") ? "zh" : "en";
+  let locale = locales.get(userId, preferredLocale);
+  const action = resolveMenuAction(text);
+
+  if (action === "english" || action === "chinese") {
+    locale = action === "english" ? "en" : "zh";
+    locales.set(userId, locale);
+    return tg("sendMessage", { chat_id: chatId, ...buildHomeMessage(locale, MINIAPP_URL) });
+  }
+  if (action === "home") {
+    locales.set(userId, locale);
+    return tg("sendMessage", { chat_id: chatId, ...buildHomeMessage(locale, MINIAPP_URL) });
+  }
+  if (action === "help") {
+    return tg("sendMessage", { chat_id: chatId, ...buildHelpMessage(locale, MINIAPP_URL) });
+  }
+  if (action === "paste") {
+    return tg("sendMessage", { chat_id: chatId, ...buildPasteMessage(locale, MINIAPP_URL) });
+  }
+  if (action === "app") {
+    return tg("sendMessage", {
+      chat_id: chatId,
+      text: locale === "en" ? "Open the Vidlink Mini App:" : "打开 Vidlink 小程序：",
       reply_markup: {
-        inline_keyboard: [[{ text: "🎬 打开 Vidlink 小程序", web_app: { url: MINIAPP_URL } }]],
+        inline_keyboard: [[{ text: locale === "en" ? "📱 Open Mini App" : "📱 打开小程序", web_app: { url: MINIAPP_URL } }]],
       },
     });
   }
 
   if (!isSupportedUrl(text)) {
-    return tg("sendMessage", { chat_id: chatId, text: "请发送受支持平台的公开视频链接。" });
+    return tg("sendMessage", { chat_id: chatId, ...buildPasteMessage(locale, MINIAPP_URL) });
   }
-  const wait = await tg("sendMessage", { chat_id: chatId, text: "🔎 正在解析…" });
+  const wait = await tg("sendMessage", { chat_id: chatId, text: locale === "en" ? "🔎 Parsing…" : "🔎 正在解析…" });
   const waitId = wait.result?.message_id;
   const release = mediaGate.acquire();
   if (!release) {
@@ -250,6 +280,7 @@ async function onMessage(msg) {
       title: r.title,
       chatId,
       userId,
+      locale,
       sizes: Object.fromEntries(r.options.map((option) => [option.sel, option.size || 0])),
     });
     const rows = r.options.map((o) => [{
@@ -259,7 +290,7 @@ async function onMessage(msg) {
     await tg("editMessageText", {
       chat_id: chatId,
       message_id: waitId,
-      text: `🎬 ${r.title}\n${r.uploader}${r.duration ? " · " + r.duration : ""}\n\n请选择清晰度：`,
+      text: `🎬 ${r.title}\n${r.uploader}${r.duration ? " · " + r.duration : ""}\n\n${locale === "en" ? "Choose a quality:" : "请选择清晰度："}`,
       reply_markup: { inline_keyboard: rows },
     });
   } catch (e) {
@@ -269,8 +300,8 @@ async function onMessage(msg) {
       chat_id: chatId,
       message_id: waitId,
       text: bot
-        ? "❌ 该平台目前拒绝了服务器的请求（YouTube 对机房 IP 的限制）。请稍后再试或换其它平台链接。"
-        : "❌ 解析失败，请检查链接是否正确、是否为公开视频。",
+        ? (locale === "en" ? "❌ The platform rejected this server request. Please try later or use another platform." : "❌ 该平台目前拒绝了服务器的请求（YouTube 对机房 IP 的限制）。请稍后再试或换其它平台链接。")
+        : (locale === "en" ? "❌ Couldn’t parse this link. Check that it is correct and public." : "❌ 解析失败，请检查链接是否正确、是否为公开视频。"),
     });
   } finally {
     release();
@@ -284,14 +315,15 @@ async function onCallback(cb) {
   await tg("answerCallbackQuery", { callback_query_id: cb.id });
   if (!chatId || !parsed) return;
   if (!rateLimiter.allow(userId)) return;
+  const locale = locales.get(userId, "zh");
   const release = mediaGate.acquire();
   if (!release) {
-    return tg("sendMessage", { chat_id: chatId, text: "当前任务较多，请稍后再试。" });
+    return tg("sendMessage", { chat_id: chatId, text: locale === "en" ? "The bot is busy. Please try again shortly." : "当前任务较多，请稍后再试。" });
   }
   const job = jobs.consume(parsed.id, chatId, userId);
   if (!job) {
     release();
-    return tg("sendMessage", { chat_id: chatId, text: "该任务已过期，请重新发送链接。" });
+    return tg("sendMessage", { chat_id: chatId, text: locale === "en" ? "This task expired. Please send the link again." : "该任务已过期，请重新发送链接。" });
   }
   const sel = parsed.selector;
   const estimatedSize = job.sizes?.[sel] || 0;
@@ -347,10 +379,47 @@ async function onCallback(cb) {
   }
 }
 
+async function configureBotProfile() {
+  const settings = [
+    ["setMyName", { name: "VidlinkApp 视频下载器" }],
+    ["setMyName", { name: "Vidlink Video Downloader", language_code: "en" }],
+    ["setMyDescription", { description: "发送公开视频链接，选择清晰度并下载。支持常见视频平台。" }],
+    ["setMyDescription", { description: "Send a public video link, choose a quality, and download.", language_code: "en" }],
+    ["setMyShortDescription", { short_description: "免费视频下载与 MP3 转换" }],
+    ["setMyShortDescription", { short_description: "Video downloads and MP3 conversion", language_code: "en" }],
+    ["setMyCommands", {
+      commands: [
+        { command: "start", description: "打开主页" },
+        { command: "help", description: "使用帮助" },
+        { command: "app", description: "打开小程序" },
+      ],
+    }],
+    ["setMyCommands", {
+      language_code: "en",
+      commands: [
+        { command: "start", description: "Open home" },
+        { command: "help", description: "How to use Vidlink" },
+        { command: "app", description: "Open Mini App" },
+      ],
+    }],
+    ["setChatMenuButton", {
+      menu_button: { type: "web_app", text: "Vidlink", web_app: { url: MINIAPP_URL } },
+    }],
+  ];
+  for (const [method, payload] of settings) {
+    try {
+      await tg(method, payload);
+    } catch {
+      console.error("A Telegram profile setting could not be applied");
+    }
+  }
+}
+
 async function main() {
   await tg("deleteWebhook", { drop_pending_updates: false });
   const me = await tg("getMe", {});
   console.log("Vidlink bot online:", me.result?.username);
+  await configureBotProfile();
   await writeFile("/tmp/bot.ready", String(Date.now()));
   let offset = 0;
   for (;;) {
