@@ -78,7 +78,7 @@ export async function GET(req) {
   args.push(url);
 
   try {
-    await runDownload(args, DOWNLOAD_TIMEOUT_MS);
+    await runDownload(args, DOWNLOAD_TIMEOUT_MS, req.signal);
   } catch (e) {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
     release();
@@ -144,28 +144,44 @@ export async function GET(req) {
   });
 }
 
-function runDownload(args, timeoutMs) {
+function runDownload(args, timeoutMs, signal) {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error("download aborted"));
+      return;
+    }
     const child = spawn(YT_DLP, args, {
       stdio: ["ignore", "ignore", "pipe"],
       detached: process.platform !== "win32",
     });
     let err = "";
-    const timer = setTimeout(() => {
+    const kill = () => {
       try {
         process.kill(-child.pid, "SIGKILL");
       } catch {
         child.kill("SIGKILL");
       }
+    };
+    const onAbort = () => {
+      clearTimeout(timer);
+      kill();
+      reject(new Error("download aborted"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      kill();
       reject(new Error("download timed out"));
     }, timeoutMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
     child.stderr.on("data", (d) => (err += d));
     child.on("error", (e) => {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
       reject(e);
     });
     child.on("close", (code) => {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
       if (code === 0) resolve();
       else reject(new Error(err.trim().split("\n").pop() || `exit ${code}`));
     });

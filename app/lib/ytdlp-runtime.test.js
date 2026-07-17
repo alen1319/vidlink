@@ -72,4 +72,14 @@ describe("yt-dlp process adapter", () => {
     expect(child.kill).toHaveBeenCalledWith("SIGKILL");
     vi.useRealTimers();
   });
+
+  it("kills the process when the request is aborted", async () => {
+    const child = fakeChild();
+    spawnMock.mockReturnValue(child);
+    const controller = new AbortController();
+    const result = runYtDlp([], { timeoutMs: 20, signal: controller.signal });
+    controller.abort();
+    await expect(result).rejects.toThrow("yt-dlp aborted");
+    expect(child.kill).toHaveBeenCalledWith("SIGKILL");
+  });
 });

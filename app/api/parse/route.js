@@ -46,7 +46,7 @@ export async function POST(req) {
   }
 
   try {
-    const info = await fetchInfo(url);
+    const info = await fetchInfo(url, { signal: req.signal });
 
     // Enforce the duration cap early so the UI can't offer an oversized job.
     if (info.duration && info.duration > LIMITS.maxDurationSec) {
