@@ -9,6 +9,7 @@ services:
       - "127.0.0.1:3000:3000"
     environment:
       - NODE_ENV=production
+      - HOSTNAME=0.0.0.0
       # Uncomment and fill to enable ads:
       # - NEXT_PUBLIC_ADSENSE_CLIENT=ca-pub-xxxxxxxxxxxxxxxx
       # - NEXT_PUBLIC_ADSENSE_SLOT_TOP=1234567890
