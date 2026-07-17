@@ -35,7 +35,8 @@ const tgCsp = [
   "img-src 'self' data: https:",
   "media-src 'self' blob:",
   "connect-src 'self'",
-  "frame-ancestors https://web.telegram.org https://*.telegram.org tg://",
+  "frame-ancestors https://web.telegram.org https://*.telegram.org",
+  "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
 ].join("; ");
@@ -51,13 +52,15 @@ const nextConfig = {
 
   // Serve the Mini App at the bot subdomain's root, keeping the WebApp URL clean.
   async rewrites() {
-    return [
-      {
+    return {
+      beforeFiles: [{
         source: "/",
         has: [{ type: "host", value: BOT_HOST }],
         destination: "/tg",
-      },
-    ];
+      }],
+      afterFiles: [],
+      fallback: [],
+    };
   },
 
   async headers() {

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { IconLink, IconClipboard, IconDownload } from "./icons";
 
 /**
@@ -12,16 +12,18 @@ export default function TgApp() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
-  const [lang, setLang] = useState("zh");
+  const languageCode = useSyncExternalStore(
+    () => () => {},
+    () => window.Telegram?.WebApp?.initDataUnsafe?.user?.language_code || "",
+    () => "",
+  );
+  const lang = !languageCode || languageCode.startsWith("zh") ? "zh" : "en";
 
   useEffect(() => {
     const wa = window.Telegram?.WebApp;
     if (!wa) return;
     wa.ready();
     wa.expand();
-    // Follow the user's Telegram language when we know it.
-    const code = wa.initDataUnsafe?.user?.language_code || "";
-    setLang(code.startsWith("zh") ? "zh" : "en");
   }, []);
 
   const t = lang === "zh"

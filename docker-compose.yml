@@ -36,6 +36,8 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    networks:
+      - provider
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 30s
@@ -57,6 +59,7 @@ services:
       - BOT_TOKEN=${BOT_TOKEN:?BOT_TOKEN is required — put it in .env}
       - SITE_URL=https://vidlink.app
       - MINIAPP_URL=https://bot.vidlink.app
+      - BOT_MAX_CONCURRENT=2
       - YT_DLP_COOKIES=/cookies/cookies.txt
       - YT_DLP_POT_PROVIDER_URL=http://pot-provider:4416
     depends_on:
@@ -64,8 +67,9 @@ services:
         condition: service_started
     volumes:
       - ./cookies:/cookies:ro
+    read_only: true
     tmpfs:
-      - /tmp:size=3g
+      - /tmp:size=512m
     pids_limit: 128
     mem_limit: 2g
     cpus: 1
@@ -73,6 +77,14 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    healthcheck:
+      test: ["CMD", "node", "-e", "const fs=require('fs');const t=Number(fs.readFileSync('/tmp/bot.ready','utf8'));process.exit(Date.now()-t<90000?0:1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - bot-provider
 
   pot-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:1.3.1@sha256:1aaa43a0ca72dfca6a6d2129a0fb4a23465c25adb1b043f8aff829a20825646b
@@ -89,3 +101,10 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    networks:
+      - provider
+      - bot-provider
+
+networks:
+  provider:
+  bot-provider:
