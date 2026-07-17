@@ -1,0 +1,20 @@
+services:
+  vidlink:
+    build: .
+    image: vidlink:latest
+    container_name: vidlink
+    restart: unless-stopped
+    # Bind to localhost only; put nginx/caddy in front for TLS + the domain.
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - NODE_ENV=production
+      # Uncomment and fill to enable ads:
+      # - NEXT_PUBLIC_ADSENSE_CLIENT=ca-pub-xxxxxxxxxxxxxxxx
+      # - NEXT_PUBLIC_ADSENSE_SLOT_TOP=1234567890
+      # - NEXT_PUBLIC_ADSENSE_SLOT_BOTTOM=0987654321
+      - MAX_CONCURRENT_DOWNLOADS=3
+      - MAX_FILESIZE=2G
+    # Downloads land in a temp dir; keep it on fast storage / tmpfs if desired.
+    tmpfs:
+      - /tmp:size=4g
